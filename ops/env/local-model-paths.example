@@ -1,4 +1,12 @@
+# Copy values from this file into runtime env/config files as needed.
+# All paths are repository-relative and intentionally point under data/models/.
+
+# Primary coding/chat model
 LEAD_MODEL_PATH=./data/models/qwen2.5-coder-7b-instruct-q4_k_m/Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf
+
+# Reasoning/fallback model
 REASONING_MODEL_PATH=./data/models/deepseek-r1-distill-qwen-7b-q4_k_m/DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf
-LLAMA_SERVER_PORT=8080
+
+# llama.cpp server defaults
 LLAMA_SERVER_HOST=127.0.0.1
+LLAMA_SERVER_PORT=8080

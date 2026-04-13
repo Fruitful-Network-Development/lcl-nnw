@@ -1,19 +1,23 @@
 # llama.cpp runtime scaffold
 
-This folder defines the backend contract for running local generation with `llama.cpp`.
+Single-runtime v1 launcher for local `llama-server` usage.
 
-## Intent
-- Keep backend-specific launch details isolated from gateway logic.
-- Make startup reproducible via scripts.
-- Avoid downloading model files in-repo.
+## Expected env file
 
-## Expected binary
-Set `LLAMA_CPP_SERVER_BIN` in `runtimes/llama_cpp/.env.example`.
+Copy template:
 
-## Expected model location
-Model paths should point into `data/models/` and be referenced from `model_registry/models/*.toml`.
+```bash
+cp runtimes/llama_cpp/.env.example runtimes/llama_cpp/.env
+```
+
+Set:
+
+- `LLAMA_CPP_SERVER_BIN`
+- `LLAMA_CPP_MODEL_PATH`
+- optional host/port/context values
 
 ## Startup
+
 ```bash
 bash runtimes/llama_cpp/start.sh
 ```
