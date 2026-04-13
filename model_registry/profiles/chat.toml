@@ -1,0 +1,6 @@
+name = "chat"
+description = "Default balanced chat profile"
+model_alias = "lead"
+fallback_model_alias = "coder"
+max_context_tokens = 8192
+temperature = 0.4

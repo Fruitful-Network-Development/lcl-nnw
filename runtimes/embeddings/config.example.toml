@@ -1,0 +1,9 @@
+[service]
+provider = "local_embeddings"
+host = "127.0.0.1"
+port = 8090
+model_alias = "embed"
+
+[index]
+output_dir = "data/vector_store"
+batch_size = 64
