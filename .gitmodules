@@ -1,0 +1,6 @@
+[submodule "runtimes/llama_cpp/llama.cpp"]
+	path = runtimes/llama_cpp/llama.cpp
+	url = git@github.com:ggml-org/llama.cpp.git
+[submodule "runtimes/embeddings/sentence-transformers"]
+	path = runtimes/embeddings/sentence-transformers
+	url = git@github.com:huggingface/sentence-transformers.git
