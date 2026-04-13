@@ -1,0 +1,7 @@
+name = "rag"
+description = "Retrieval-augmented profile"
+model_alias = "reasoning"
+embedding_model_alias = "embed"
+fallback_model_alias = "lead"
+max_context_tokens = 16384
+temperature = 0.2

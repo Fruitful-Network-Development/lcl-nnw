@@ -1,0 +1,10 @@
+name = "Llama-3.1-8B-Instruct"
+alias = "coder"
+family = "llama3.1"
+role = "general_alternate"
+backend = "llama_cpp"
+default_quantization = "Q4_K_M"
+weight_source = "huggingface://meta-llama/Llama-3.1-8B-Instruct"
+local_weight_path = "data/models/Llama-3.1-8B-Instruct/Llama-3.1-8B-Instruct.Q4_K_M.gguf"
+enabled = true
+notes = "Optional alternate general model. Manifest only; no auto-download."

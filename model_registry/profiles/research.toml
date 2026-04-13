@@ -1,0 +1,6 @@
+name = "research"
+description = "Longer-context research/exploration profile"
+model_alias = "reasoning"
+fallback_model_alias = "lead"
+max_context_tokens = 16384
+temperature = 0.3

@@ -1,0 +1,40 @@
+# Environment files
+.env
+.env.*
+!.env.example
+ops/env/.env
+runtimes/llama_cpp/.env
+
+# Build outputs
+**/target/
+
+# Python/node/editor cache
+__pycache__/
+.pytest_cache/
+.venv/
+node_modules/
+
+# Runtime logs and state
+ops/logs/*
+!ops/logs/.gitkeep
+
+# Data directories (runtime-generated)
+data/models/*
+!data/models/.gitkeep
+data/sessions/*
+!data/sessions/.gitkeep
+data/caches/*
+!data/caches/.gitkeep
+data/vector_store/*
+!data/vector_store/.gitkeep
+
+# Large model artifacts and common weight formats
+*.gguf
+*.bin
+*.safetensors
+*.onnx
+*.pt
+*.pth
+
+# OS noise
+.DS_Store

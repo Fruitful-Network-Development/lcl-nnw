@@ -1,0 +1,10 @@
+name = "bge-small-en-v1.5"
+alias = "embed"
+family = "bge"
+role = "embedding"
+backend = "embeddings"
+default_quantization = "fp16"
+weight_source = "huggingface://BAAI/bge-small-en-v1.5"
+local_weight_path = "data/models/bge-small-en-v1.5"
+enabled = true
+notes = "Embedding model for retrieval indexing/query encoding. Manifest only; no auto-download."
