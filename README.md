@@ -27,6 +27,16 @@ What is not included in Git:
 - Python package caches
 - system toolchains
 
+Bootstrap (single source of truth):
+
+```bash
+bash ops/scripts/bootstrap.sh
+```
+
+Current interface locations:
+- `ui/cli/`
+- `ui/web/`
+
 Suggested local lead model path:
 `data/models/qwen2.5-coder-7b-instruct/Qwen2.5-Coder-7B-Instruct.Q4_K_M.gguf`
 
