@@ -45,6 +45,42 @@ fn build_embedding_request(route: &router::RouteDecision) -> Option<EmbeddingReq
         })
 }
 
+fn is_embedding_required(profile: &str) -> bool {
+    profile == "rag"
+}
+
+fn validate_embedding_alias(
+    route: &router::RouteDecision,
+    registry: &registry::Registry,
+) -> Result<(), String> {
+    let Some(alias) = route.embedding_model_alias.as_deref() else {
+        return Ok(());
+    };
+
+    if !registry.has_model_alias(alias) {
+        return Err(format!(
+            "embedding model alias `{alias}` does not exist in registry"
+        ));
+    }
+    if registry.backend_for_alias(alias).is_none() {
+        return Err(format!(
+            "embedding model alias `{alias}` is disabled or has no resolvable backend"
+        ));
+    }
+    if route.embedding_backend.is_none() {
+        return Err(format!(
+            "embedding model alias `{alias}` does not resolve to a backend in route decision"
+        ));
+    }
+    if route.embedding_endpoint.is_none() {
+        return Err(format!(
+            "embedding model alias `{alias}` does not resolve to an endpoint in route decision"
+        ));
+    }
+
+    Ok(())
+}
+
 fn main() -> std::io::Result<()> {
     let repo_root = std::env::var("HOME_LLM_ROOT").unwrap_or_else(|_| "..".to_string());
     let registry_root = Path::new(&repo_root).join("model_registry");
@@ -61,9 +97,27 @@ fn main() -> std::io::Result<()> {
         println!("selected model name: {model_name}");
     }
     let generation_request = build_generation_request(&route);
-    let embedding_request = build_embedding_request(&route);
+    let embedding_request = match validate_embedding_alias(&route, &registry) {
+        Ok(()) => build_embedding_request(&route),
+        Err(error) if is_embedding_required(&route.profile) => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!(
+                    "profile `{}` requires a valid embedding model alias: {error}",
+                    route.profile
+                ),
+            ));
+        }
+        Err(error) => {
+            eprintln!(
+                "warning: dropping embedding request for profile `{}` because embedding alias is invalid: {error}",
+                route.profile
+            );
+            None
+        }
+    };
     println!(
-        "selected route -> session={} profile={} model={} fallback={} temp={} max_ctx={} embed_model={:?} backend={} endpoint={}",
+        "selected route -> session={} profile={} model={} fallback={} temp={} max_ctx={} embed_model={:?} backend={} endpoint={} embed_backend={:?} embed_endpoint={:?}",
         route.session_id,
         route.profile,
         route.model_alias,
@@ -72,12 +126,14 @@ fn main() -> std::io::Result<()> {
         route.max_context_tokens,
         route.embedding_model_alias,
         route.backend,
-        route.endpoint
+        route.endpoint,
+        route.embedding_backend,
+        route.embedding_endpoint
     );
 
     let adapter_registry = AdapterRegistry;
-    let adapter = adapter_registry.build(&route.backend, &route.endpoint);
-    let generation_response = adapter.generate(&generation_request);
+    let generation_adapter = adapter_registry.build(&route.backend, &route.endpoint);
+    let generation_response = generation_adapter.generate(&generation_request);
     println!("generation adapter payload: {:?}", generation_request);
     println!(
         "generation adapter response: backend={} endpoint={} accepted={}",
@@ -85,7 +141,16 @@ fn main() -> std::io::Result<()> {
     );
 
     if let Some(embed_req) = embedding_request {
-        let embed_response = adapter.embed(&embed_req);
+        let embedding_backend = route
+            .embedding_backend
+            .as_deref()
+            .unwrap_or(route.backend.as_str());
+        let embedding_endpoint = route
+            .embedding_endpoint
+            .as_deref()
+            .unwrap_or(route.endpoint.as_str());
+        let embedding_adapter = adapter_registry.build(embedding_backend, embedding_endpoint);
+        let embed_response = embedding_adapter.embed(&embed_req);
         println!("embedding adapter payload: {:?}", embed_req);
         println!(
             "embedding adapter response: backend={} endpoint={} accepted={}",

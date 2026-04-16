@@ -12,6 +12,8 @@ pub struct RouteDecision {
     pub embedding_model_alias: Option<String>,
     pub backend: String,
     pub endpoint: String,
+    pub embedding_backend: Option<String>,
+    pub embedding_endpoint: Option<String>,
     pub session_id: String,
 }
 
@@ -65,6 +67,13 @@ pub fn select_route(
         .backend_for_alias(&model_alias)
         .unwrap_or(policy.default_backend.as_str())
         .to_string();
+    let embedding_backend = embedding_model_alias
+        .as_deref()
+        .and_then(|alias| registry.backend_for_alias(alias))
+        .map(ToString::to_string);
+    let embedding_endpoint = embedding_model_alias
+        .as_ref()
+        .map(|_| policy.default_endpoint.clone());
 
     RouteDecision {
         profile,
@@ -75,6 +84,8 @@ pub fn select_route(
         embedding_model_alias,
         backend,
         endpoint: policy.default_endpoint.clone(),
+        embedding_backend,
+        embedding_endpoint,
         session_id: session.id.clone(),
     }
 }
