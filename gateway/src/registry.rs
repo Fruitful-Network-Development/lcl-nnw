@@ -22,9 +22,10 @@ impl Registry {
                 }
 
                 let contents = fs::read_to_string(&path)?;
-                let name = parse_toml_string(&contents, "name").unwrap_or_else(|| "chat".to_string());
-                let model_alias =
-                    parse_toml_string(&contents, "model_alias").unwrap_or_else(|| "lead".to_string());
+                let name =
+                    parse_toml_string(&contents, "name").unwrap_or_else(|| "chat".to_string());
+                let model_alias = parse_toml_string(&contents, "model_alias")
+                    .unwrap_or_else(|| "lead".to_string());
                 profile_map.insert(name, model_alias);
             }
         }
@@ -34,6 +35,16 @@ impl Registry {
 
     pub fn profile_model(&self, profile: &str) -> Option<String> {
         self.profile_map.get(profile).cloned()
+    }
+
+    pub fn models(&self) -> Vec<(String, String)> {
+        let mut entries = self
+            .profile_map
+            .iter()
+            .map(|(profile, model)| (profile.clone(), model.clone()))
+            .collect::<Vec<_>>();
+        entries.sort_by(|a, b| a.0.cmp(&b.0));
+        entries
     }
 }
 
