@@ -3,6 +3,8 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
+use serde::Deserialize;
+
 #[derive(Debug, Clone)]
 pub struct Registry {
     profile_map: HashMap<String, ProfileConfig>,
@@ -18,7 +20,7 @@ pub struct ProfileConfig {
     pub embedding_model_alias: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct ModelManifest {
     pub name: String,
     pub alias: String,
@@ -26,7 +28,7 @@ pub struct ModelManifest {
     pub enabled: bool,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 struct ProfileManifest {
     pub name: String,
     pub model_alias: String,
@@ -83,7 +85,7 @@ fn load_profiles(path: &Path) -> io::Result<HashMap<String, ProfileConfig>> {
         }
 
         let data = fs::read_to_string(&file)?;
-        let parsed = parse_profile_manifest(&data);
+        let parsed = parse_profile_manifest(&file, &data)?;
 
         profiles.insert(
             parsed.name,
@@ -114,7 +116,7 @@ fn load_models(path: &Path) -> io::Result<HashMap<String, ModelManifest>> {
         }
 
         let data = fs::read_to_string(&file)?;
-        let parsed = parse_model_manifest(&data);
+        let parsed = parse_model_manifest(&file, &data)?;
 
         models.insert(parsed.alias.clone(), parsed);
     }
@@ -122,57 +124,17 @@ fn load_models(path: &Path) -> io::Result<HashMap<String, ModelManifest>> {
     Ok(models)
 }
 
-fn parse_model_manifest(data: &str) -> ModelManifest {
-    ModelManifest {
-        name: parse_string(data, "name").unwrap_or_else(|| "unknown".to_string()),
-        alias: parse_string(data, "alias").unwrap_or_else(|| "lead".to_string()),
-        backend: parse_string(data, "backend").unwrap_or_else(|| "llama_cpp".to_string()),
-        enabled: parse_bool(data, "enabled").unwrap_or(true),
-    }
+fn parse_model_manifest(file: &Path, data: &str) -> io::Result<ModelManifest> {
+    toml::from_str(data).map_err(|err| invalid_manifest(file, err))
 }
 
-fn parse_profile_manifest(data: &str) -> ProfileManifest {
-    ProfileManifest {
-        name: parse_string(data, "name").unwrap_or_else(|| "chat".to_string()),
-        model_alias: parse_string(data, "model_alias").unwrap_or_else(|| "lead".to_string()),
-        temperature: parse_f32(data, "temperature").unwrap_or(0.4),
-        max_context_tokens: parse_usize(data, "max_context_tokens").unwrap_or(8192),
-        fallback_model_alias: parse_string(data, "fallback_model_alias")
-            .unwrap_or_else(|| "lead".to_string()),
-        embedding_model_alias: parse_string(data, "embedding_model_alias"),
-    }
+fn parse_profile_manifest(file: &Path, data: &str) -> io::Result<ProfileManifest> {
+    toml::from_str(data).map_err(|err| invalid_manifest(file, err))
 }
 
-fn parse_string(data: &str, key: &str) -> Option<String> {
-    parse_raw(data, key).map(|v| v.trim_matches('"').to_string())
-}
-
-fn parse_bool(data: &str, key: &str) -> Option<bool> {
-    match parse_raw(data, key)?.trim() {
-        "true" => Some(true),
-        "false" => Some(false),
-        _ => None,
-    }
-}
-
-fn parse_f32(data: &str, key: &str) -> Option<f32> {
-    parse_raw(data, key)?.parse::<f32>().ok()
-}
-
-fn parse_usize(data: &str, key: &str) -> Option<usize> {
-    parse_raw(data, key)?.parse::<usize>().ok()
-}
-
-fn parse_raw(data: &str, key: &str) -> Option<String> {
-    for line in data.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        let (lhs, rhs) = line.split_once('=')?;
-        if lhs.trim() == key {
-            return Some(rhs.trim().to_string());
-        }
-    }
-    None
+fn invalid_manifest(file: &Path, error: toml::de::Error) -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidData,
+        format!("Invalid manifest {}: {}", file.display(), error),
+    )
 }
