@@ -10,6 +10,10 @@ This repository does **not** store model weights in Git. Put local GGUF model fi
 
 - `data/models/`
 
+Canonical model directory naming convention:
+- lowercase slug directories (letters, numbers, dots, and hyphens)
+- example: `data/models/qwen2.5-coder-7b-instruct/`
+
 What is included in Git:
 - the repo scaffold
 - vendored `llama.cpp` source
@@ -24,7 +28,7 @@ What is not included in Git:
 - system toolchains
 
 Suggested local lead model path:
-`data/models/qwen2.5-coder-7b-instruct-q4_k_m/Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf`
+`data/models/qwen2.5-coder-7b-instruct/Qwen2.5-Coder-7B-Instruct.Q4_K_M.gguf`
 
 Suggested local reasoning model path:
-`data/models/deepseek-r1-distill-qwen-7b-q4_k_m/DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf`
+`data/models/deepseek-r1-distill-qwen-7b/DeepSeek-R1-Distill-Qwen-7B.Q4_K_M.gguf`
