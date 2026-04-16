@@ -1,8 +1,11 @@
+mod adapters;
+mod http_server;
 mod policy;
 mod registry;
 mod router;
 mod session;
 
+use adapters::AdapterRegistry;
 use std::path::Path;
 
 #[derive(Debug)]
@@ -54,10 +57,14 @@ fn main() -> std::io::Result<()> {
 
     println!("gateway status: ok");
     println!("registry root: {}", registry_root.display());
+    if let Some(model_name) = registry.model_name_for_alias(&route.model_alias) {
+        println!("selected model name: {model_name}");
+    }
     let generation_request = build_generation_request(&route);
     let embedding_request = build_embedding_request(&route);
     println!(
-        "selected route -> profile={} model={} fallback={} temp={} max_ctx={} embed_model={:?} backend={} endpoint={}",
+        "selected route -> session={} profile={} model={} fallback={} temp={} max_ctx={} embed_model={:?} backend={} endpoint={}",
+        route.session_id,
         route.profile,
         route.model_alias,
         route.fallback_model_alias,
@@ -67,9 +74,37 @@ fn main() -> std::io::Result<()> {
         route.backend,
         route.endpoint
     );
+
+    let adapter_registry = AdapterRegistry;
+    let adapter = adapter_registry.build(&route.backend, &route.endpoint);
+    let generation_response = adapter.generate(&generation_request);
     println!("generation adapter payload: {:?}", generation_request);
-    println!("embedding adapter payload: {:?}", embedding_request);
+    println!(
+        "generation adapter response: backend={} endpoint={} accepted={}",
+        generation_response.backend, generation_response.endpoint, generation_response.accepted
+    );
+
+    if let Some(embed_req) = embedding_request {
+        let embed_response = adapter.embed(&embed_req);
+        println!("embedding adapter payload: {:?}", embed_req);
+        println!(
+            "embedding adapter response: backend={} endpoint={} accepted={}",
+            embed_response.backend, embed_response.endpoint, embed_response.accepted
+        );
+    }
+
     println!("adapter hook: {}", router::adapter_hook_description());
+
+    if std::env::var("GATEWAY_HTTP_ONCE")
+        .ok()
+        .as_deref()
+        .is_some_and(|value| value == "1")
+    {
+        let addr =
+            std::env::var("GATEWAY_HTTP_ADDR").unwrap_or_else(|_| "127.0.0.1:9090".to_string());
+        println!("http gateway listening for one request on {addr}");
+        http_server::serve_once(&addr, &route)?;
+    }
 
     Ok(())
 }
