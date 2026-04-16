@@ -8,6 +8,8 @@ pub struct RouteDecision {
     pub model_alias: String,
     pub backend: String,
     pub endpoint: String,
+    pub quantization: String,
+    pub rationale: String,
 }
 
 pub fn select_route(
@@ -19,15 +21,15 @@ pub fn select_route(
 ) -> RouteDecision {
     let _prompt_size = prompt.len();
     let profile = policy.resolve_profile(requested_profile, session);
-    let model_alias = registry
-        .profile_model(&profile)
-        .unwrap_or_else(|| "lead".to_string());
+    let evaluation = policy.evaluate_model_for_profile(registry, &profile);
 
     RouteDecision {
         profile,
-        model_alias,
-        backend: policy.default_backend.clone(),
+        model_alias: evaluation.model_alias,
+        backend: evaluation.backend,
         endpoint: policy.default_endpoint.clone(),
+        quantization: evaluation.quantization,
+        rationale: evaluation.rationale,
     }
 }
 

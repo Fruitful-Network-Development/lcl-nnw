@@ -18,8 +18,13 @@ fn main() -> std::io::Result<()> {
     println!("gateway status: ok");
     println!("registry root: {}", registry_root.display());
     println!(
-        "selected route -> profile={} model={} backend={} endpoint={}",
-        route.profile, route.model_alias, route.backend, route.endpoint
+        "selected route -> profile={} model={} backend={} endpoint={} quantization={} rationale={}\n",
+        route.profile,
+        route.model_alias,
+        route.backend,
+        route.endpoint,
+        route.quantization,
+        route.rationale
     );
     println!("adapter hook: {}", router::adapter_hook_description());
 
