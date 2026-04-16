@@ -24,10 +24,6 @@ pub fn select_route(
 ) -> RouteDecision {
     let profile = policy.resolve_profile(requested_profile, session, prompt);
     let profile_config = registry.profile_config(&profile);
-    let model_alias = profile_config
-        .as_ref()
-        .map(|config| config.model_alias.clone())
-        .unwrap_or_else(|| "lead".to_string());
     let temperature = profile_config
         .as_ref()
         .map(|config| config.temperature)
@@ -36,12 +32,34 @@ pub fn select_route(
         .as_ref()
         .map(|config| config.max_context_tokens)
         .unwrap_or(8192);
+
+    let Some(default_alias) = registry.preferred_routable_alias().map(ToString::to_string) else {
+        return RouteDecision {
+            profile,
+            model_alias: "unavailable".to_string(),
+            temperature,
+            max_context_tokens,
+            fallback_model_alias: "unavailable".to_string(),
+            embedding_model_alias: None,
+            backend: "unavailable".to_string(),
+            endpoint: "unavailable://no-routable-model".to_string(),
+            session_id: session.id.clone(),
+        };
+    };
+
+    let model_alias = profile_config
+        .as_ref()
+        .map(|config| config.model_alias.clone())
+        .filter(|alias| registry.is_model_routable(alias))
+        .unwrap_or_else(|| default_alias.clone());
     let fallback_model_alias = profile_config
         .as_ref()
         .map(|config| config.fallback_model_alias.clone())
-        .filter(|alias| registry.has_model_alias(alias))
-        .unwrap_or_else(|| "lead".to_string());
-    let embedding_model_alias = profile_config.and_then(|config| config.embedding_model_alias);
+        .filter(|alias| registry.is_model_routable(alias))
+        .unwrap_or_else(|| default_alias.clone());
+    let embedding_model_alias = profile_config
+        .and_then(|config| config.embedding_model_alias)
+        .filter(|alias| registry.is_model_routable(alias));
 
     let backend = registry
         .backend_for_alias(&model_alias)

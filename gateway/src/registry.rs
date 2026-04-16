@@ -61,9 +61,28 @@ impl Registry {
         })
     }
 
-    pub fn has_model_alias(&self, alias: &str) -> bool {
-        self.model_map.contains_key(alias)
+    pub fn is_model_routable(&self, alias: &str) -> bool {
+        self.model_map.get(alias).is_some_and(|model| model.enabled)
     }
+
+    pub fn first_enabled_model_alias(&self) -> Option<&str> {
+        let mut aliases: Vec<&str> = self
+            .model_map
+            .iter()
+            .filter_map(|(alias, model)| model.enabled.then_some(alias.as_str()))
+            .collect();
+        aliases.sort_unstable();
+        aliases.into_iter().next()
+    }
+
+    pub fn preferred_routable_alias(&self) -> Option<&str> {
+        if self.is_model_routable("lead") {
+            Some("lead")
+        } else {
+            self.first_enabled_model_alias()
+        }
+    }
+
     pub fn model_name_for_alias(&self, alias: &str) -> Option<&str> {
         self.model_map.get(alias).map(|m| m.name.as_str())
     }
