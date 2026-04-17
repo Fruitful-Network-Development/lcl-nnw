@@ -9,6 +9,6 @@ min_ram_gb = 14.0
 requires_gpu = false
 estimated_latency_ms = 1400
 weight_source = "huggingface://deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
-local_weight_path = "data/models/DeepSeek-R1-Distill-Qwen-7B/DeepSeek-R1-Distill-Qwen-7B.Q4_K_M.gguf"
+local_weight_path = "data/models/deepseek-r1-distill-qwen-7b/DeepSeek-R1-Distill-Qwen-7B.Q4_K_M.gguf"
 enabled = true
 notes = "Reasoning specialist profile target. Manifest only; no auto-download."
