@@ -40,6 +40,25 @@ struct ProfileManifest {
 
 impl Registry {
     pub fn load_from_dir(root: &Path) -> io::Result<Self> {
+        let profiles_dir = root.join("profiles");
+        let mut profile_map = HashMap::new();
+
+        if profiles_dir.is_dir() {
+            for entry in fs::read_dir(&profiles_dir)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) != Some("toml") {
+                    continue;
+                }
+
+                let contents = fs::read_to_string(&path)?;
+                let name =
+                    parse_toml_string(&contents, "name").unwrap_or_else(|| "chat".to_string());
+                let model_alias = parse_toml_string(&contents, "model_alias")
+                    .unwrap_or_else(|| "lead".to_string());
+                profile_map.insert(name, model_alias);
+            }
+        }
         let model_map = load_models(&root.join("models"))?;
         let profile_map = load_profiles(&root.join("profiles"))?;
 
@@ -53,6 +72,14 @@ impl Registry {
         self.profile_map.get(profile).cloned()
     }
 
+    pub fn models(&self) -> Vec<(String, String)> {
+        let mut entries = self
+            .profile_map
+            .iter()
+            .map(|(profile, model)| (profile.clone(), model.clone()))
+            .collect::<Vec<_>>();
+        entries.sort_by(|a, b| a.0.cmp(&b.0));
+        entries
     pub fn backend_for_alias(&self, alias: &str) -> Option<&str> {
         self.model_map.get(alias).and_then(|m| {
             if m.enabled {
