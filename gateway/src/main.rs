@@ -1,4 +1,5 @@
 mod adapters;
+mod http_server;
 mod policy;
 mod registry;
 mod router;
@@ -29,6 +30,83 @@ struct AppState {
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
+use adapters::AdapterRegistry;
+use std::path::Path;
+
+#[derive(Debug)]
+pub struct GenerationRequest {
+    pub profile: String,
+    pub model_alias: String,
+    pub fallback_model_alias: String,
+    pub temperature: f32,
+    pub max_context_tokens: usize,
+}
+
+#[derive(Debug)]
+pub struct EmbeddingRequest {
+    pub profile: String,
+    pub model_alias: String,
+    pub max_context_tokens: usize,
+}
+
+fn build_generation_request(route: &router::RouteDecision) -> GenerationRequest {
+    GenerationRequest {
+        profile: route.profile.clone(),
+        model_alias: route.model_alias.clone(),
+        fallback_model_alias: route.fallback_model_alias.clone(),
+        temperature: route.temperature,
+        max_context_tokens: route.max_context_tokens,
+    }
+}
+
+fn build_embedding_request(route: &router::RouteDecision) -> Option<EmbeddingRequest> {
+    route
+        .embedding_model_alias
+        .as_ref()
+        .map(|embedding_model_alias| EmbeddingRequest {
+            profile: route.profile.clone(),
+            model_alias: embedding_model_alias.clone(),
+            max_context_tokens: route.max_context_tokens,
+        })
+}
+
+fn is_embedding_required(profile: &str) -> bool {
+    profile == "rag"
+}
+
+fn validate_embedding_alias(
+    route: &router::RouteDecision,
+    registry: &registry::Registry,
+) -> Result<(), String> {
+    let Some(alias) = route.embedding_model_alias.as_deref() else {
+        return Ok(());
+    };
+
+    if !registry.has_model_alias(alias) {
+        return Err(format!(
+            "embedding model alias `{alias}` does not exist in registry"
+        ));
+    }
+    if registry.backend_for_alias(alias).is_none() {
+        return Err(format!(
+            "embedding model alias `{alias}` is disabled or has no resolvable backend"
+        ));
+    }
+    if route.embedding_backend.is_none() {
+        return Err(format!(
+            "embedding model alias `{alias}` does not resolve to a backend in route decision"
+        ));
+    }
+    if route.embedding_endpoint.is_none() {
+        return Err(format!(
+            "embedding model alias `{alias}` does not resolve to an endpoint in route decision"
+        ));
+    }
+
+    Ok(())
+}
+
+fn main() -> std::io::Result<()> {
     let repo_root = std::env::var("HOME_LLM_ROOT").unwrap_or_else(|_| "..".to_string());
     let registry_root = Path::new(&repo_root).join("model_registry");
 
@@ -275,4 +353,85 @@ async fn embeddings(
             endpoint: route.endpoint,
         },
     }))
+    println!("gateway status: ok");
+    println!("registry root: {}", registry_root.display());
+    if let Some(model_name) = registry.model_name_for_alias(&route.model_alias) {
+        println!("selected model name: {model_name}");
+    }
+    let generation_request = build_generation_request(&route);
+    let embedding_request = match validate_embedding_alias(&route, &registry) {
+        Ok(()) => build_embedding_request(&route),
+        Err(error) if is_embedding_required(&route.profile) => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!(
+                    "profile `{}` requires a valid embedding model alias: {error}",
+                    route.profile
+                ),
+            ));
+        }
+        Err(error) => {
+            eprintln!(
+                "warning: dropping embedding request for profile `{}` because embedding alias is invalid: {error}",
+                route.profile
+            );
+            None
+        }
+    };
+    println!(
+        "selected route -> session={} profile={} model={} fallback={} temp={} max_ctx={} embed_model={:?} backend={} endpoint={} embed_backend={:?} embed_endpoint={:?}",
+        route.session_id,
+        route.profile,
+        route.model_alias,
+        route.fallback_model_alias,
+        route.temperature,
+        route.max_context_tokens,
+        route.embedding_model_alias,
+        route.backend,
+        route.endpoint,
+        route.embedding_backend,
+        route.embedding_endpoint
+    );
+
+    let adapter_registry = AdapterRegistry;
+    let generation_adapter = adapter_registry.build(&route.backend, &route.endpoint);
+    let generation_response = generation_adapter.generate(&generation_request);
+    println!("generation adapter payload: {:?}", generation_request);
+    println!(
+        "generation adapter response: backend={} endpoint={} accepted={}",
+        generation_response.backend, generation_response.endpoint, generation_response.accepted
+    );
+
+    if let Some(embed_req) = embedding_request {
+        let embedding_backend = route
+            .embedding_backend
+            .as_deref()
+            .unwrap_or(route.backend.as_str());
+        let embedding_endpoint = route
+            .embedding_endpoint
+            .as_deref()
+            .unwrap_or(route.endpoint.as_str());
+        let embedding_adapter = adapter_registry.build(embedding_backend, embedding_endpoint);
+        let embed_response = embedding_adapter.embed(&embed_req);
+        println!("embedding adapter payload: {:?}", embed_req);
+        println!(
+            "embedding adapter response: backend={} endpoint={} accepted={}",
+            embed_response.backend, embed_response.endpoint, embed_response.accepted
+        );
+    }
+
+    println!("adapter hook: {}", router::adapter_hook_description());
+
+    if std::env::var("GATEWAY_HTTP_ONCE")
+        .ok()
+        .as_deref()
+        .is_some_and(|value| value == "1")
+    {
+        let addr =
+            std::env::var("GATEWAY_HTTP_ADDR").unwrap_or_else(|_| "127.0.0.1:9090".to_string());
+        println!("http gateway listening for one request on {addr}");
+        http_server::serve_once(&addr, &route)?;
+    }
+
+    Ok(())
 }
