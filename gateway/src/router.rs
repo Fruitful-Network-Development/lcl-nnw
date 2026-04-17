@@ -1,10 +1,19 @@
 use crate::policy::Policy;
-use crate::registry::Registry;
+use crate::registry::{ModelManifest, Registry};
 use crate::session::Session;
+
+#[derive(Debug, Clone)]
+pub struct ModelReference {
+    pub alias: String,
+    pub name: String,
+    pub backend: String,
+}
 
 #[derive(Debug, Clone)]
 pub struct RouteDecision {
     pub profile: String,
+    pub adapter_key: String,
+    pub model: ModelReference,
     pub model_alias: String,
     pub temperature: f32,
     pub max_context_tokens: usize,
@@ -88,8 +97,24 @@ pub fn select_route(
         .as_ref()
         .map(|_| policy.default_endpoint.clone());
 
+    let selected_model = registry
+        .model_by_alias(&model_alias)
+        .cloned()
+        .or_else(|| registry.model_by_alias("lead").cloned())
+        .unwrap_or_else(|| ModelManifest {
+            alias: "lead".to_string(),
+            name: "lead".to_string(),
+            backend: policy.default_backend.clone(),
+        });
+
     RouteDecision {
         profile,
+        adapter_key: selected_model.backend.clone(),
+        model: ModelReference {
+            alias: selected_model.alias,
+            name: selected_model.name,
+            backend: selected_model.backend,
+        },
         model_alias,
         temperature,
         max_context_tokens,
@@ -104,5 +129,6 @@ pub fn select_route(
 }
 
 pub fn adapter_hook_description() -> &'static str {
+    "Backend adapters are selected from model backend keys using gateway/src/adapters/."
     "Adapters are selected via backend registry and route decisions carry profile, backend, and session constraints."
 }
