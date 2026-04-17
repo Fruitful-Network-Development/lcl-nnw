@@ -12,6 +12,8 @@ pub struct RouteDecision {
     pub embedding_model_alias: Option<String>,
     pub backend: String,
     pub endpoint: String,
+    pub quantization: String,
+    pub rationale: String,
     pub embedding_backend: Option<String>,
     pub embedding_endpoint: Option<String>,
     pub session_id: String,
@@ -24,6 +26,17 @@ pub fn select_route(
     prompt: &str,
     requested_profile: &str,
 ) -> RouteDecision {
+    let _prompt_size = prompt.len();
+    let profile = policy.resolve_profile(requested_profile, session);
+    let evaluation = policy.evaluate_model_for_profile(registry, &profile);
+
+    RouteDecision {
+        profile,
+        model_alias: evaluation.model_alias,
+        backend: evaluation.backend,
+        endpoint: policy.default_endpoint.clone(),
+        quantization: evaluation.quantization,
+        rationale: evaluation.rationale,
     let profile = policy.resolve_profile(requested_profile, session, prompt);
     let profile_config = registry.profile_config(&profile);
     let temperature = profile_config

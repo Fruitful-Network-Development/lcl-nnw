@@ -398,6 +398,13 @@ async fn embeddings(
     let generation_response = generation_adapter.generate(&generation_request);
     println!("generation adapter payload: {:?}", generation_request);
     println!(
+        "selected route -> profile={} model={} backend={} endpoint={} quantization={} rationale={}\n",
+        route.profile,
+        route.model_alias,
+        route.backend,
+        route.endpoint,
+        route.quantization,
+        route.rationale
         "generation adapter response: backend={} endpoint={} accepted={}",
         generation_response.backend, generation_response.endpoint, generation_response.accepted
     );
