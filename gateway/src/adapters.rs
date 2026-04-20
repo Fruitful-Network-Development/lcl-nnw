@@ -1,110 +1,243 @@
-use crate::router::RouteDecision;
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
 
-pub trait Adapter: Send + Sync {
-    fn chat_completion(&self, route: &RouteDecision, prompt: &str) -> String;
-    fn embedding(&self, route: &RouteDecision, input: &str) -> Vec<f32>;
+use crate::{
+    lanes::{BackendKind, LaneConfig},
+    types::{ChatMessage, UpstreamChatRequest, UpstreamChatResponse},
+};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AdapterOutput {
+    pub content: String,
+    pub finish_reason: String,
 }
 
-#[derive(Default)]
-pub struct StubAdapter;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AdapterErrorKind {
+    Timeout,
+    Upstream5xx,
+    Upstream4xx,
+    Network,
+    InvalidResponse,
+}
 
-impl Adapter for StubAdapter {
-    fn chat_completion(&self, route: &RouteDecision, prompt: &str) -> String {
-        format!(
-            "stubbed response via {} at {} ({} chars)",
-            route.backend,
-            route.endpoint,
-            prompt.chars().count()
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AdapterError {
+    pub kind: AdapterErrorKind,
+    pub message: String,
+}
+
+impl AdapterError {
+    pub fn is_retryable(&self) -> bool {
+        matches!(
+            self.kind,
+            AdapterErrorKind::Timeout | AdapterErrorKind::Upstream5xx | AdapterErrorKind::Network
         )
     }
 
-    fn embedding(&self, route: &RouteDecision, input: &str) -> Vec<f32> {
-        let seed = (input.len() as f32).max(1.0);
-        vec![
-            seed,
-            (route.profile.len() as f32) / 10.0,
-            (route.backend.len() as f32) / 10.0,
-        ]
-    }
-}
-
-pub struct AdapterDispatcher {
-    default_adapter: Box<dyn Adapter>,
-}
-
-impl Default for AdapterDispatcher {
-    fn default() -> Self {
+    fn timeout(message: impl Into<String>) -> Self {
         Self {
-            default_adapter: Box::<StubAdapter>::default(),
+            kind: AdapterErrorKind::Timeout,
+            message: message.into(),
         }
     }
-}
 
-impl AdapterDispatcher {
-    pub fn chat_completion(&self, route: &RouteDecision, prompt: &str) -> String {
-        self.default_adapter.chat_completion(route, prompt)
-    }
-
-    pub fn embedding(&self, route: &RouteDecision, input: &str) -> Vec<f32> {
-        self.default_adapter.embedding(route, input)
-use crate::{EmbeddingRequest, GenerationRequest};
-
-#[derive(Debug, Clone)]
-pub struct AdapterResponse {
-    pub backend: String,
-    pub endpoint: String,
-    pub accepted: bool,
-}
-
-pub trait BackendAdapter {
-    fn name(&self) -> &'static str;
-    fn generate(&self, request: &GenerationRequest) -> AdapterResponse;
-    fn embed(&self, request: &EmbeddingRequest) -> AdapterResponse;
-}
-
-#[derive(Debug, Clone)]
-pub struct LlamaCppAdapter {
-    endpoint: String,
-}
-
-impl LlamaCppAdapter {
-    pub fn new(endpoint: impl Into<String>) -> Self {
+    fn upstream_5xx(message: impl Into<String>) -> Self {
         Self {
-            endpoint: endpoint.into(),
+            kind: AdapterErrorKind::Upstream5xx,
+            message: message.into(),
+        }
+    }
+
+    fn upstream_4xx(message: impl Into<String>) -> Self {
+        Self {
+            kind: AdapterErrorKind::Upstream4xx,
+            message: message.into(),
+        }
+    }
+
+    fn network(message: impl Into<String>) -> Self {
+        Self {
+            kind: AdapterErrorKind::Network,
+            message: message.into(),
+        }
+    }
+
+    fn invalid_response(message: impl Into<String>) -> Self {
+        Self {
+            kind: AdapterErrorKind::InvalidResponse,
+            message: message.into(),
         }
     }
 }
 
-impl BackendAdapter for LlamaCppAdapter {
-    fn name(&self) -> &'static str {
-        "llama_cpp"
+impl std::fmt::Display for AdapterError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
     }
+}
 
-    fn generate(&self, _request: &GenerationRequest) -> AdapterResponse {
-        AdapterResponse {
-            backend: self.name().to_string(),
-            endpoint: self.endpoint.clone(),
-            accepted: true,
+impl std::error::Error for AdapterError {}
+
+pub async fn dispatch_chat(
+    client: &Client,
+    lane: &LaneConfig,
+    messages: &[ChatMessage],
+    session_id: Option<&str>,
+    intent: Option<&str>,
+) -> Result<AdapterOutput, AdapterError> {
+    match lane
+        .backend_kind()
+        .map_err(|err| AdapterError::invalid_response(err.to_string()))?
+    {
+        BackendKind::LocalLlamaCpp => {
+            LocalLlamaCppAdapter.chat_completion(client, lane, messages).await
         }
-    }
-
-    fn embed(&self, _request: &EmbeddingRequest) -> AdapterResponse {
-        AdapterResponse {
-            backend: self.name().to_string(),
-            endpoint: self.endpoint.clone(),
-            accepted: true,
+        BackendKind::RemoteCustomLlama => {
+            RemoteCustomLlamaAdapter
+                .chat_completion(client, lane, messages, session_id, intent)
+                .await
         }
     }
 }
 
-#[derive(Debug, Default)]
-pub struct AdapterRegistry;
+struct LocalLlamaCppAdapter;
 
-impl AdapterRegistry {
-    pub fn build(&self, backend: &str, endpoint: &str) -> Box<dyn BackendAdapter> {
-        match backend {
-            "llama_cpp" => Box::new(LlamaCppAdapter::new(endpoint)),
-            _ => Box::new(LlamaCppAdapter::new(endpoint)),
+impl LocalLlamaCppAdapter {
+    async fn chat_completion(
+        &self,
+        client: &Client,
+        lane: &LaneConfig,
+        messages: &[ChatMessage],
+    ) -> Result<AdapterOutput, AdapterError> {
+        let body = LlamaCppChatRequest {
+            messages: messages.to_vec(),
+            temperature: lane.temperature,
+            stream: false,
+        };
+
+        let response = client
+            .post(chat_endpoint(&lane.endpoint))
+            .json(&body)
+            .send()
+            .await
+            .map_err(map_transport_error)?;
+
+        let status = response.status();
+        if status.is_server_error() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(AdapterError::upstream_5xx(format!(
+                "local_llama_cpp upstream error {}: {}",
+                status, body
+            )));
         }
+        if status.is_client_error() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(AdapterError::upstream_4xx(format!(
+                "local_llama_cpp request rejected {}: {}",
+                status, body
+            )));
+        }
+
+        let payload = response
+            .json::<LlamaCppChatResponse>()
+            .await
+            .map_err(|err| AdapterError::invalid_response(err.to_string()))?;
+
+        let Some(choice) = payload.choices.into_iter().next() else {
+            return Err(AdapterError::invalid_response(
+                "local_llama_cpp returned no choices",
+            ));
+        };
+
+        Ok(AdapterOutput {
+            content: choice.message.content,
+            finish_reason: choice.finish_reason.unwrap_or_else(|| "stop".to_string()),
+        })
     }
+}
+
+struct RemoteCustomLlamaAdapter;
+
+impl RemoteCustomLlamaAdapter {
+    async fn chat_completion(
+        &self,
+        client: &Client,
+        lane: &LaneConfig,
+        messages: &[ChatMessage],
+        session_id: Option<&str>,
+        intent: Option<&str>,
+    ) -> Result<AdapterOutput, AdapterError> {
+        let body = UpstreamChatRequest {
+            model: lane.model_id.clone(),
+            messages: messages.to_vec(),
+            temperature: lane.temperature,
+            max_context_tokens: lane.max_context_tokens,
+            session_id: session_id.map(ToOwned::to_owned),
+            intent: intent.map(ToOwned::to_owned),
+        };
+
+        let response = client
+            .post(chat_endpoint(&lane.endpoint))
+            .json(&body)
+            .send()
+            .await
+            .map_err(map_transport_error)?;
+
+        let status = response.status();
+        if status.is_server_error() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(AdapterError::upstream_5xx(format!(
+                "remote_custom_llama upstream error {}: {}",
+                status, body
+            )));
+        }
+        if status.is_client_error() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(AdapterError::upstream_4xx(format!(
+                "remote_custom_llama request rejected {}: {}",
+                status, body
+            )));
+        }
+
+        let payload = response
+            .json::<UpstreamChatResponse>()
+            .await
+            .map_err(|err| AdapterError::invalid_response(err.to_string()))?;
+
+        Ok(AdapterOutput {
+            content: payload.content,
+            finish_reason: payload.finish_reason,
+        })
+    }
+}
+
+fn chat_endpoint(base: &str) -> String {
+    format!("{}/v1/chat/completions", base.trim_end_matches('/'))
+}
+
+fn map_transport_error(err: reqwest::Error) -> AdapterError {
+    if err.is_timeout() {
+        AdapterError::timeout(err.to_string())
+    } else {
+        AdapterError::network(err.to_string())
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct LlamaCppChatRequest {
+    messages: Vec<ChatMessage>,
+    temperature: f32,
+    stream: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct LlamaCppChatResponse {
+    choices: Vec<LlamaCppChoice>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct LlamaCppChoice {
+    message: ChatMessage,
+    finish_reason: Option<String>,
 }

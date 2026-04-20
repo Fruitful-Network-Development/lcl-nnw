@@ -4,15 +4,16 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 mkdir -p \
+  "$ROOT_DIR/.claw" \
+  "$ROOT_DIR/.claw/sessions" \
   "$ROOT_DIR/data/models" \
-  "$ROOT_DIR/data/sessions" \
   "$ROOT_DIR/data/caches" \
-  "$ROOT_DIR/data/vector_store" \
   "$ROOT_DIR/ops/logs"
 
-if [[ ! -f "$ROOT_DIR/ops/env/.env" && -f "$ROOT_DIR/ops/env/.env.example" ]]; then
-  cp "$ROOT_DIR/ops/env/.env.example" "$ROOT_DIR/ops/env/.env"
-  echo "Created ops/env/.env from template."
-fi
-
 echo "Bootstrap complete."
+echo "  Runtime config   $ROOT_DIR/.claw/settings.json"
+echo "  Session store    $ROOT_DIR/.claw/sessions"
+echo "  Model cache      $ROOT_DIR/data/models"
+if [[ -f "$ROOT_DIR/.claw/settings.local.json.example" ]]; then
+  echo "  Local overrides  copy .claw/settings.local.json.example to .claw/settings.local.json if you need machine-specific changes"
+fi

@@ -1,34 +1,29 @@
 # Environment files
 .env
-.env.*
-!.env.example
 ops/env/.env
-runtimes/llama_cpp/.env
 
 # Build outputs
 **/target/
 
-# Python/node/editor cache
-__pycache__/
-.pytest_cache/
-.venv/
-node_modules/
-
 # Runtime logs and state
 ops/logs/*
 !ops/logs/.gitkeep
-
-# Data directories (runtime-generated)
 data/models/*
 !data/models/.gitkeep
-data/sessions/*
-!data/sessions/.gitkeep
 data/caches/*
 !data/caches/.gitkeep
-data/vector_store/*
-!data/vector_store/.gitkeep
+.claw/settings.local.json
+.claw/sessions/*
+!.claw/sessions/.gitkeep
+.claw/skills/
+.claw/commands/
+.claw/agents/
+.claw/worker-state.json
+.clawhip/
+.claw-base
+.clawd-todos.json
 
-# Large model artifacts and common weight formats
+# Model artifacts
 *.gguf
 *.bin
 *.safetensors

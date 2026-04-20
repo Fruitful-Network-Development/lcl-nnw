@@ -1,130 +1,57 @@
 # Architecture
 
-## Layers
-1. **Interface shells**: `ui/cli/` and `ui/web/` are thin clients that only gather user input and render responses.
-2. **Gateway/orchestrator API**: `gateway/` exposes a stable HTTP contract for orchestration and adapter dispatch.
-3. **Model registry**: `model_registry/` stores profile/model metadata (`profiles/*.toml`) used for routing.
-4. **Runtimes**: `runtimes/` backend-specific launch/config stubs.
-1. **Interface surfaces**: `ui/cli/` and `ui/web/` (current user-facing entry points).
-2. **Gateway/orchestrator**: `gateway/` (stable routing endpoint).
-3. **Model registry**: `model_registry/` (models/profiles/quant defaults).
-4. **Runtimes**: `runtimes/` backend-specific launch/config stubs, including vendored `runtimes/llama_cpp/llama.cpp`.
-5. **Retrieval**: `retrieval/` indexing/chunk/index pipeline skeleton.
-6. **Operational glue**: `ops/` env, scripts, compose placeholders.
-7. **Runtime data**: `data/` (models/sessions/cache/vector store).
+## Primary Shape
 
-## Gateway orchestration flow
-1. Client sends a request to `gateway`.
-2. Gateway extracts **profile** (explicit `profile` field, else `model`, else default), **session** (`session_id`, else fallback), and user input.
-3. Gateway calls routing policy (`policy + registry + session`) to select backend route details.
-4. Gateway dispatches to adapters (`gateway/src/adapters.rs`) using the selected route.
-5. Gateway returns a normalized response with route metadata for observability.
+This repository is now a Rust Cargo workspace centered on a local agent CLI, not an HTTP gateway.
 
-## Stable HTTP API contract
-The gateway currently exposes four minimal endpoints:
+The active product surface is:
 
-### `GET /health`
-Health check.
+- `lcl` CLI binary from `crates/rusty-claude-cli`
+- runtime/session/config/tooling code in `crates/runtime`
+- provider/client code in `crates/api`
+- slash-command, plugin, MCP, and tool support from the imported Claw workspace crates
+- a local OpenAI-compatible backend served by `llama-server`
 
-**Response**
-```json
-{
-  "status": "ok"
-}
-```
+## Runtime Flow
 
-### `GET /models`
-Lists profile-to-model mappings from `model_registry/profiles`.
+1. `lcl` loads merged config from `.claw/settings.json` and `.claw/settings.local.json`.
+2. The `lcl.provider` namespace projects local provider settings into the upstream provider client layer.
+3. Session state is persisted under `.claw/sessions/`.
+4. Tool permissions default to `workspace-write`.
+5. Requests are sent to the configured OpenAI-compatible endpoint, which is expected to be a local `llama-server`.
 
-**Response**
-```json
-{
-  "object": "list",
-  "data": [
-    { "id": "lead", "profile": "chat" }
-  ]
-}
-```
+## Config And State
 
-### `POST /v1/chat/completions`
-OpenAI-compatible shape (minimal) for chat orchestration.
+Active config precedence is:
 
-**Request (minimal fields)**
-```json
-{
-  "profile": "chat",
-  "session_id": "sess-123",
-  "messages": [
-    { "role": "user", "content": "hello" }
-  ]
-}
-```
+1. user config home `settings.json`
+2. project `.claw/settings.json`
+3. project `.claw/settings.local.json`
 
-Also supports:
-- `model` as profile alias input.
-- `input` as a direct prompt string.
+Within this repo, the committed project config is the main source of truth for the local runtime.
 
-**Response**
-```json
-{
-  "id": "chatcmpl-sess-123",
-  "object": "chat.completion",
-  "model": "lead",
-  "profile": "chat",
-  "session_id": "sess-123",
-  "route": {
-    "profile": "chat",
-    "backend": "llama_cpp",
-    "endpoint": "http://127.0.0.1:8080"
-  },
-  "choices": [
-    {
-      "index": 0,
-      "message": { "role": "assistant", "content": "..." },
-      "finish_reason": "stop"
-    }
-  ]
-}
-```
+Active runtime state lives in:
 
-### `POST /v1/embeddings`
-OpenAI-compatible shape (minimal) for embedding orchestration.
+- `.claw/settings.json`
+- `.claw/settings.local.json`
+- `.claw/sessions/`
+- `data/models/`
 
-**Request**
-```json
-{
-  "profile": "rag",
-  "session_id": "sess-123",
-  "input": ["chunk-a", "chunk-b"]
-}
-```
+## Local Provider Contract
 
-`input` can be either a single string or an array of strings.
+The local-only first release assumes:
 
-**Response**
-```json
-{
-  "object": "list",
-  "data": [
-    { "object": "embedding", "index": 0, "embedding": [1.0, 0.4, 0.9] }
-  ],
-  "model": "embed-small",
-  "profile": "rag",
-  "session_id": "sess-123",
-  "route": {
-    "profile": "rag",
-    "backend": "llama_cpp",
-    "endpoint": "http://127.0.0.1:8080"
-  }
-}
-```
-## Notes on `third_party/claw-code/`
+- `lcl.provider.kind = "openai-compat"`
+- `lcl.provider.baseUrl` points at the local `llama-server`
+- `lcl.provider.apiKey` is a local placeholder token unless overridden
+- `lcl.llamaServer.*` drives the launcher under `runtimes/llama_cpp/start.sh`
 
-`third_party/claw-code/` is not a required current integration surface in this scaffold. Treat it as future/planned unless and until it is added explicitly.
+## Archived Components
 
-## Design notes
-- Gateway API is the stable orchestration surface; UIs should not embed routing logic.
-- `model_registry` is source-controlled metadata only (no weights).
-- Backend adapters can be swapped/extended without changing client contracts.
-- Backends can be swapped by changing policy/adapter wiring in gateway and runtime scripts.
-- Bootstrap is standardized via `bash ops/scripts/bootstrap.sh` from the repo root.
+The following paths remain for reference or migration only and are not active architecture:
+
+- `gateway/`
+- `model_registry/`
+- old lane manifests
+- the former gateway HTTP endpoints
+- `remote_frontier` runtime settings

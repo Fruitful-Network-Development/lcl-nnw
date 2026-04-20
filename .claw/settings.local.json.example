@@ -1,0 +1,12 @@
+{
+  "lcl": {
+    "provider": {
+      "baseUrl": "http://127.0.0.1:8080/v1",
+      "apiKey": "local-dev-token"
+    },
+    "llamaServer": {
+      "bin": "llama-server",
+      "modelPath": "data/models/qwen2.5-coder-7b-instruct/Qwen2.5-Coder-7B-Instruct.Q4_K_M.gguf"
+    }
+  }
+}

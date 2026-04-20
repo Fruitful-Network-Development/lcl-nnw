@@ -1,0 +1,8 @@
+name = "local_cpu16"
+backend = "local_llama_cpp"
+endpoint = "http://127.0.0.1:8080"
+model_id = "qwen2.5-coder-7b-instruct-q4_k_m"
+enabled = true
+temperature = 0.2
+max_context_tokens = 8192
+local_weight_path = "data/models/qwen2.5-coder-7b-instruct/Qwen2.5-Coder-7B-Instruct.Q4_K_M.gguf"

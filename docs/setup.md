@@ -1,32 +1,88 @@
 # Setup
 
-This repository is already a scaffold with local runtime/data directories.
+## Requirements
 
-## Current state
+- Rust toolchain with `cargo`
+- `llama-server` installed locally
+- a GGUF model file available at the path configured in `.claw/settings.json` or `.claw/settings.local.json`
 
-- `runtimes/llama_cpp/llama.cpp` is **vendored directly** in this repository.
-- This project is **not currently using Git submodules** for `llama.cpp` or `third_party/claw-code`.
-- There is no required `third_party/claw-code` checkout in the current scaffold.
+This repo no longer uses the gateway-first env workflow. Runtime settings come from `.claw/`, not `ops/env/.env`.
 
-If the project later migrates to submodules, those instructions should be added in a dedicated migration section.
+## Bootstrap
 
-## Bootstrap (single source of truth)
-
-From the repository root:
+From the repo root:
 
 ```bash
 bash ops/scripts/bootstrap.sh
 ```
 
-This creates local runtime directories (for example `data/models/`, `data/sessions/`, and `ops/logs/`) and copies `ops/env/.env.example` to `ops/env/.env` when needed.
+That prepares:
 
-## Local model placement
+- `.claw/sessions/`
+- `data/models/`
+- `data/caches/`
+- `ops/logs/`
 
-Model weights are local-only and should be placed under `data/models/`.
+## Configure The Local Runtime
 
-Example model paths:
+Shared defaults live in `.claw/settings.json`.
 
-- `data/models/qwen2.5-coder-7b-instruct/Qwen2.5-Coder-7B-Instruct.Q4_K_M.gguf`
-- `data/models/deepseek-r1-distill-qwen-7b/DeepSeek-R1-Distill-Qwen-7B.Q4_K_M.gguf`
+If you need machine-specific overrides, copy the example file and edit it:
 
-Do not commit GGUF or other large model artifacts to Git.
+```bash
+cp .claw/settings.local.json.example .claw/settings.local.json
+```
+
+The repo-specific `lcl` namespace supports:
+
+- `lcl.provider.kind`
+- `lcl.provider.baseUrl`
+- `lcl.provider.apiKey`
+- `lcl.llamaServer.bin`
+- `lcl.llamaServer.host`
+- `lcl.llamaServer.port`
+- `lcl.llamaServer.ctxSize`
+- `lcl.llamaServer.modelPath`
+
+## Start llama-server
+
+```bash
+bash runtimes/llama_cpp/start.sh
+```
+
+That script reads merged `.claw/settings.json` plus `.claw/settings.local.json`, resolves the configured model path, and launches `llama-server` with the configured host, port, and context size.
+
+## Run lcl
+
+Interactive mode:
+
+```bash
+bash ops/scripts/dev.sh
+```
+
+One-shot mode:
+
+```bash
+cargo run -p rusty-claude-cli --bin lcl -- prompt "Explain the workspace layout."
+```
+
+Useful local diagnostics:
+
+```bash
+cargo run -p rusty-claude-cli --bin lcl -- doctor
+cargo run -p rusty-claude-cli --bin lcl -- status
+```
+
+## Smoke Test
+
+With `llama-server` running:
+
+```bash
+bash ops/scripts/smoke-test.sh
+```
+
+The smoke script checks:
+
+- `lcl doctor`
+- `lcl status`
+- a prompt round-trip when the configured OpenAI-compatible endpoint is reachable

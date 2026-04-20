@@ -1,6 +1,0 @@
-name = "coding"
-description = "Coding-first profile with lower temperature"
-model_alias = "lead"
-fallback_model_alias = "reasoning"
-max_context_tokens = 8192
-temperature = 0.2

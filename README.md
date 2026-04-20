@@ -1,44 +1,69 @@
 # lcl-nnw
 
-Minimal offline-first local LLM stack scaffold.
+`lcl-nnw` is now a Claw-first local agent repo. The primary surface is `lcl`, a Rust CLI assembled from selectively imported upstream Claw Code workspace crates and adapted for this repository's local `llama-server` runtime.
 
-This repository vendors `llama.cpp` source directly under:
+This cutover intentionally drops the old lane-first HTTP gateway contract. `remote_frontier` is out of scope for the first Claw-based release.
 
-- `runtimes/llama_cpp/llama.cpp`
+## What Is Active
 
-This repository does **not** store model weights in Git. Put local GGUF model files under:
+- `lcl` CLI for interactive and one-shot agent workflows
+- `.claw/settings.json` and `.claw/settings.local.json` for runtime config
+- local OpenAI-compatible model serving through `llama-server`
+- session state under `.claw/sessions`
+- model weights under `data/models`
 
-- `data/models/`
+## What Is Archived
 
-Canonical model directory naming convention:
-- lowercase slug directories (letters, numbers, dots, and hyphens)
-- example: `data/models/qwen2.5-coder-7b-instruct/`
+- `gateway/` remains in the repo only as archived code
+- `model_registry/` lane manifests are no longer the active runtime source of truth
+- `ops/env/.env.example` is kept only as a migration note
+- `GET /health`, `GET /lanes`, and `POST /v1/chat/completions` are not supported interfaces in this phase
 
-What is included in Git:
-- the repo scaffold
-- vendored `llama.cpp` source
-- model manifests and local path examples
-- bootstrap scripts
-- local runtime/data directory structure
-
-What is not included in Git:
-- GGUF model binaries
-- Hugging Face downloads
-- Python package caches
-- system toolchains
-
-Bootstrap (single source of truth):
+## Quick Start
 
 ```bash
 bash ops/scripts/bootstrap.sh
+bash runtimes/llama_cpp/start.sh
+bash ops/scripts/dev.sh
 ```
 
-Current interface locations:
-- `ui/cli/`
-- `ui/web/`
+That launches the local `lcl` CLI in interactive mode. For a one-shot prompt:
 
-Suggested local lead model path:
-`data/models/qwen2.5-coder-7b-instruct/Qwen2.5-Coder-7B-Instruct.Q4_K_M.gguf`
+```bash
+cargo run -p rusty-claude-cli --bin lcl -- prompt "Summarize this repository."
+```
 
-Suggested local reasoning model path:
-`data/models/deepseek-r1-distill-qwen-7b/DeepSeek-R1-Distill-Qwen-7B.Q4_K_M.gguf`
+For local verification:
+
+```bash
+bash ops/scripts/smoke-test.sh
+```
+
+## Config
+
+Committed defaults live in `.claw/settings.json` and point at the local lane values that previously lived in `local_cpu16`:
+
+- model: `qwen2.5-coder-7b-instruct-q4_k_m`
+- provider: `http://127.0.0.1:8080/v1`
+- API key: `local-dev-token`
+- permission mode: `workspace-write`
+
+Optional machine-local overrides belong in `.claw/settings.local.json`. A starter template lives at `.claw/settings.local.json.example`.
+
+## Repo Layout
+
+```text
+Cargo.toml                Root Rust workspace
+crates/                   Imported and adapted Claw runtime crates
+.claw/                    Runtime config and sessions
+ops/scripts/              Bootstrap, run, and smoke helpers
+runtimes/llama_cpp/       Config-driven llama-server launcher
+data/models/              Local GGUF model weights
+docs/                     Setup, architecture, and provenance
+gateway/                  Archived, unsupported gateway code
+model_registry/           Archived lane manifests
+```
+
+## Provenance
+
+Upstream import details, pinned commit metadata, and adapted module ownership live in [docs/upstream-provenance.md](docs/upstream-provenance.md).

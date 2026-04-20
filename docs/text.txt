@@ -1,59 +1,0 @@
-Precise Setup Plan: Rust-Based Offline LLM Coding Stack with Claw Code (Isolated on Local Machine)
-The following instructions establish a fully offline, Rust-centric LLM coding environment. It replaces the TypeScript-based OpenClaw with a purpose-built Rust fork of Claw Code optimized for local models via Ollama. This configuration ensures maximum performance, minimal resource overhead, native binary execution, and strict isolation—no external network dependencies after initial setup. All components run locally, with filesystem access confined to your chosen workspace.
-Prerequisites (One-Time Installation)
-	1.	Install Rust Toolchain (required for building the Rust binary) Open a terminal and run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-	2.	source "$HOME/.cargo/env"
-	3.	 Verify with rustc --version and cargo --version. This installs the stable toolchain (minimum 1.70).
-	4.	Install Ollama (local inference server) Run the official one-liner: curl -fsSL https://ollama.com/install.sh | sh
-	5.	 Start the Ollama service: ollama serve
-	6.	 (On Windows/macOS, Ollama runs as a background service after installation.)
-Step 1: Clone and Build the Rust Claw Code (Local/Ollama-Optimized Fork)
-This fork (codetwentyfive/claw-code-local) is a clean-room Rust reimplementation of the Claude Code harness, explicitly patched for Ollama and any OpenAI-compatible local endpoint.
-git clone https://github.com/codetwentyfive/claw-code-local.git
-cd claw-code-local/rust
-cargo build -p rusty-claude-cli --release
-	•	The resulting binary is located at:
-	•	Linux/macOS: target/release/claw
-	•	Windows: target/release/claw.exe
-Add the binary to your PATH for convenience (optional but recommended):
-	•	Linux/macOS: export PATH="$PWD/target/release:$PATH" (add to ~/.bashrc or ~/.zshrc).
-	•	Windows (PowerShell): Add the directory containing claw.exe to your user PATH via System Properties.
-Step 2: Configure Environment for Fully Local Ollama Operation
-Set the following environment variables (these route all requests to your local Ollama instance). Use a dummy key for local endpoints.
-Linux/macOS (Bash/Zsh):
-export OPENAI_API_KEY=ollama
-export OPENAI_BASE_URL=http://localhost:11434/v1
-Windows (PowerShell):
-$env:OPENAI_API_KEY = "ollama"
-$env:OPENAI_BASE_URL = "http://localhost:11434/v1"
-Add these lines to your shell profile (~/.bashrc, ~/.zshrc, or $PROFILE in PowerShell) for persistence.
-Step 3: Download and Prepare Local Models
-In a separate terminal (with Ollama running), pull a suitable model. Recommended starting models for coding (adjust based on your hardware; aim for ≥32 GB RAM for larger variants):
-ollama pull qwen3:14b          # Balanced performance/quality
-# or
-ollama pull deepseek-v3:32b    # Strong coding capability
-# or
-ollama pull llama4:70b         # Larger context if hardware supports
-Models are stored locally in ~/.ollama/models (or equivalent on Windows) and require no further internet access.
-Step 4: Launch the Rust Claw Code Agent
-Navigate to any project directory (or create a dedicated workspace) and start the agent:
-	•	Interactive REPL (recommended for coding sessions): claw --model qwen3:14b
-	•	
-	•	One-shot command example: claw --model qwen3:14b "Analyze this repository and implement feature X"
-	•	
-	•	Resume previous session: claw --resume latest
-	•	
-Inside the REPL, you may switch models with /model qwen3:14b or use standard agent commands for file editing, terminal execution, repository navigation, and multi-step reasoning. All operations remain fully offline.
-Step 5: Access and Usage Notes
-	•	Primary Interface: Command-line REPL/TUI (no additional server required). This provides full agentic coding capabilities identical to the original harness.
-	•	Optional Web UI (for browser access): If a graphical interface is desired while maintaining isolation, install Open WebUI locally (connects directly to Ollama on port 11434): pip install open-webui
-	•	open-webui serve
-	•	 Access at http://localhost:8080. The Rust Claw Code CLI operates independently and can be used alongside it. No network exposure occurs unless you explicitly configure port forwarding.
-Isolation and Offline Best Practices
-	•	Network Isolation: After the initial git clone, Ollama install, and model download, you may disable internet access entirely. The stack uses only localhost:11434 and local binaries.
-	•	Filesystem Sandboxing: The agent respects your current working directory. For additional security, run within a dedicated directory or use OS-level permissions.
-	•	Resource Efficiency: The Rust binary has negligible overhead compared to Node.js alternatives, making it suitable for sustained coding sessions on consumer hardware.
-	•	Verification: Run claw doctor (if available in the binary) or test with a simple prompt to confirm local routing.
-	•	Updates: To update, re-clone and rebuild only when desired; no automatic checks occur.
-This configuration delivers a high-performance, Rust-native coding agent stack that is completely self-contained, zero-cost, and private. It directly addresses your preference for Rust while preserving the full functionality of the original workflow (agent harness, RAG-ready context, multi-agent loops).
-If your operating system, hardware specifications (e.g., GPU/CPU/RAM), or preferred model requires adjustments, or if you encounter any build issues, provide those details for further refinement.
